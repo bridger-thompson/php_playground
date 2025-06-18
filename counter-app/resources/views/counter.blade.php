@@ -6,6 +6,7 @@
     <title>Counter App</title>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script src="{{ asset('js/apiClient.js') }}"></script>
     <style>
         body {
             font-family: 'Nunito', sans-serif;
@@ -99,6 +100,9 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .spin-animation {
+            animation: spin 1s ease-in-out infinite;
+        }
     </style>
 </head>
 <body>
@@ -119,81 +123,51 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const counterElement = document.getElementById('counter');
             const incrementBtn = document.getElementById('incrementBtn');
             const resetBtn = document.getElementById('resetBtn');
             const errorMessage = document.getElementById('errorMessage');
             const spinner = document.getElementById('spinner');
-            
-            let isRequestInProgress = false;
-            
-            function setLoading(loading) {
-                isRequestInProgress = loading;
-                incrementBtn.disabled = loading;
-                resetBtn.disabled = loading;
-                spinner.classList.toggle('visible', loading);
-                
-                if (loading) {
-                    counterElement.classList.add('updating');
-                } else {
-                    setTimeout(() => {
-                        counterElement.classList.remove('updating');
-                    }, 300);
-                }
-            }
-            
-            function showError(show) {
-                errorMessage.classList.toggle('visible', show);
-                if (show) {
-                    setTimeout(() => {
-                        errorMessage.classList.remove('visible');
-                    }, 3000);
-                }
-            }
 
-            async function makeRequest(url) {
-                if (isRequestInProgress) return;
-                
-                setLoading(true);
-                showError(false);
+            const api = new ApiClient()
+                .setLoadingStartCallback(() => {
+                    incrementBtn.disabled = resetBtn.disabled = true;
+                    spinner.classList.toggle('visible', true);
+                    counterElement.classList.add('scale-110', 'text-blue-500');
+                    errorMessage.classList.add('hidden');
+                })
+                .setLoadingEndCallback(() => {
+                    incrementBtn.disabled = resetBtn.disabled = false;
+                    spinner.classList.toggle('visible', false);
+                    setTimeout(() => counterElement.classList.remove('scale-110', 'text-blue-500'), 300);
+                })
+                .setErrorCallback(error => {
+                    console.error('Error:', error);
+                    errorMessage.classList.remove('hidden');
+                    setTimeout(() => errorMessage.classList.add('hidden'), 3000);
+                });
+
+            incrementBtn.addEventListener('click', async () => {
                 try {
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                            'Accept': 'application/json'
-                        },
-                        cache: 'no-store'
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
-                    }
-                    
-                    const data = await response.json();
-                    console.log('Response data:', data);
+                    const data = await api.post('{{ route("counter.increment") }}');
                     counterElement.textContent = data.count;
                 } catch (error) {
-                    console.error('Error:', error);
-                    showError(true);
-                } finally {
-                    setLoading(false);
+                    // Error is handled by the API client
                 }
-            }
-            incrementBtn.addEventListener('click', function() {
-                makeRequest('{{ route('counter.increment') }}');
             });
-            
-            resetBtn.addEventListener('click', function() {
-                makeRequest('{{ route('counter.reset') }}');
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === '+' || event.key === '=') {
-                    incrementBtn.click();
-                } else if (event.key === 'r') {
-                    resetBtn.click();
+
+            resetBtn.addEventListener('click', async () => {
+                try {
+                    const data = await api.post('{{ route("counter.reset") }}');
+                    counterElement.textContent = data.count;
+                } catch (error) {
+                    // Error is handled by the API client
                 }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === '+' || event.key === '=') incrementBtn.click();
+                else if (event.key === 'r') resetBtn.click();
             });
         });
     </script>
